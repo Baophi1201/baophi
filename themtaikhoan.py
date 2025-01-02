@@ -1,15 +1,24 @@
 import json
+
 from PyQt5.QtWidgets import (
-    QMainWindow, QVBoxLayout, QTextEdit, QPushButton, QLabel, QWidget, QApplication
+    QMainWindow,
+    QVBoxLayout,
+    QTextEdit,
+    QPushButton,
+    QLabel,
+    QWidget,
+    QApplication,
+    QMessageBox,  # Thêm QMessageBox để hiển thị thông báo
 )
 from PyQt5.QtCore import Qt
 
+
 class AddAccountApp(QMainWindow):
-    def __init__(self, main_window): 
+    def __init__(self, main_window):
         super().__init__()
         self.setWindowTitle("Thêm tài khoản")
         self.resize(600, 400)  # Set the window size
-        
+
         # Move the window to the center of the screen
         screen = QApplication.primaryScreen().geometry()
         x = (screen.width() - self.width()) // 2
@@ -22,16 +31,20 @@ class AddAccountApp(QMainWindow):
 
         # Ô nhập tài khoản (được chỉnh kích thước to hơn)
         self.account_input = QTextEdit()  # Đổi từ QLineEdit sang QTextEdit
-        self.account_input.setPlaceholderText("Nhập tài khoản theo định dạng: tkfb|mkfb|tkgolike|mkgolike|proxy\nMỗi tài khoản một dòng")
+        self.account_input.setPlaceholderText(
+            "Nhập tài khoản theo định dạng: tkfb|mkfb|tkgolike|mkgolike|proxy\nMỗi tài khoản một dòng"
+        )
         self.account_input.setFixedHeight(300)  # Set a fixed height for the input field
-        self.account_input.setFixedWidth(600)  # Set a fixed width for the input field (wider)
-        
+        self.account_input.setFixedWidth(
+            600
+        )  # Set a fixed width for the input field (wider)
+
         # Align the placeholder text to the left
         self.account_input.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        
+
         # Adding some padding to ensure the text stays at the top-left
         self.account_input.setStyleSheet("padding-top: 10px; padding-left: 10px;")
-        
+
         layout.addWidget(self.account_input)
 
         # Nút thêm tài khoản
@@ -48,23 +61,28 @@ class AddAccountApp(QMainWindow):
         # Lấy toàn bộ nội dung và tách thành từng dòng
         content = self.account_input.toPlainText().strip()
         if not content:
+            QMessageBox.warning(self, "Lỗi", "Vui lòng nhập tài khoản.")
             return
 
         # Tách thành từng dòng và lọc bỏ dòng trống
-        account_lines = [line.strip() for line in content.split('\n') if line.strip()]
+        account_lines = [line.strip() for line in content.split("\n") if line.strip()]
 
         try:
             # Đọc danh sách tài khoản hiện có
             try:
-                with open("taikhoan.json", "r", encoding='utf-8') as f:
+                with open("taikhoan.json", "r", encoding="utf-8") as f:
                     accounts = json.load(f)
             except FileNotFoundError:
                 accounts = []
 
             # Xử lý từng dòng tài khoản
             for line in account_lines:
-                account_data = line.split("|")
-                if len(account_data) == 5:
+                try:
+                    account_data = line.split("|")
+                    if len(account_data) != 5:
+                        raise ValueError(
+                            "Định dạng tài khoản không hợp lệ. Vui lòng kiểm tra lại."
+                        )
                     new_account = {
                         "tkfb": account_data[0].strip(),
                         "mkfb": account_data[1].strip(),
@@ -85,15 +103,21 @@ class AddAccountApp(QMainWindow):
                     # Nếu tài khoản chưa tồn tại, thêm mới
                     if not account_exists:
                         accounts.append(new_account)
+                except ValueError as e:
+                    QMessageBox.warning(self, "Lỗi", str(e))
+                    return
 
             # Lưu lại vào file
-            with open("taikhoan.json", "w", encoding='utf-8') as f:
+            with open("taikhoan.json", "w", encoding="utf-8") as f:
                 json.dump(accounts, f, indent=4, ensure_ascii=False)
 
             # Cập nhật lại TreeView trong gui.py
             self.main_window.load_accounts()
-            
+
             # Đóng cửa sổ thêm tài khoản
             self.close()
         except Exception as e:
             print(f"Lỗi khi thêm tài khoản: {str(e)}")
+            QMessageBox.critical(
+                self, "Lỗi", f"Đã xảy ra lỗi khi thêm tài khoản: {str(e)}"
+            )
