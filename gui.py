@@ -307,7 +307,10 @@ class MainApp(QMainWindow):
         def run_task():
             try:
                 # Khởi tạo driver thông qua quá trình login
-                driver = start_login_process(chromedriver_path)
+                account_data = self.get_account_data_from_row(row)  # Lấy thông tin tài khoản
+                driver = start_login_process(
+                    chromedriver_path, account_data, account_data["tkfb"]  # Truyền tên profile
+                )
                 
                 if driver:
                     # Lưu driver vào dictionary
@@ -321,7 +324,6 @@ class MainApp(QMainWindow):
                         self.table.item(row, 9).setText("Đang chạy")
                     
                     # Bắt đầu xử lý công việc
-                    account_data = self.get_account_data_from_row(row)
                     start_work_process(account_data)
                 else:
                     # Cập nhật trạng thái lỗi nếu không khởi tạo được driver
@@ -384,176 +386,4 @@ class MainApp(QMainWindow):
                 stop_action.setEnabled(status == "Đang chạy")
 
         # Hiển thị menu và xử lý action được chọn
-        action = menu.exec_(self.table.viewport().mapToGlobal(position))
-        
-        # Nếu click vào dòng cụ thể
-        if action:
-            if row >= 0:
-                if action == start_action:
-                    self.start_accounts([row])
-                elif action == stop_action:
-                    self.stop_account(row)
-                elif action == delete_action:
-                    self.delete_account()
-            else:
-                # Nếu click ở ngoài, thực hiện cho tất cả các tài khoản không bị pause
-                if action == start_action:
-                    # Tìm tất cả các tài khoản có thể chạy
-                    available_rows = []
-                    for row in range(self.table.rowCount()):
-                        status_item = self.table.item(row, 9)
-                        if status_item and status_item.text() in ["Chưa bắt đầu", "Đã dừng"]:
-                            available_rows.append(row)
-                    if available_rows:
-                        self.start_accounts(available_rows)
-                elif action == stop_action:
-                    for row in range(self.table.rowCount()):
-                        status_item = self.table.item(row, 9)
-                        if status_item and status_item.text() == "Đang chạy":
-                            self.stop_account(row)
-
-    def start_accounts(self, rows):
-        # Lấy số luồng tối đa từ settings
-        try:
-            with open("settings.json", "r", encoding='utf-8') as file:
-                settings = json.load(file)
-                print("Nội dung settings.json:", settings)  # Debug
-                max_threads = int(settings.get("Số luồng", 1))  # Đọc số luồng từ settings
-        except (FileNotFoundError, json.JSONDecodeError, ValueError) as e:
-            print(f"Lỗi đọc settings: {e}")  # Debug
-            max_threads = 1  # Mặc định nếu không đọc được
-
-        print(f"Số luồng được chọn: {max_threads}")  # Debug
-
-        # Đếm số tài khoản đang chạy và số slot còn lại
-        running_count = 0
-        available_rows = []
-
-        # Tìm các tài khoản có thể chạy
-        for row in rows:
-            # Kiểm tra trạng thái
-            status_item = self.table.item(row, 9)
-            current_status = status_item.text() if status_item else "Unknown"
-            
-            # Kiểm tra checkbox pause
-            checkbox_widget = self.table.cellWidget(row, 8)
-            is_paused = checkbox_widget and checkbox_widget.layout().itemAt(0).widget().isChecked()
-
-            # Nếu đang chạy, tăng biến đếm
-            if current_status == "Đang chạy":
-                running_count += 1
-            
-            # Nếu chưa bắt đầu hoặc đã dừng và KHÔNG bị pause, thêm vào danh sách có thể chạy
-            if current_status in ["Chưa bắt đầu", "Đã dừng"] and not is_paused:
-                available_rows.append(row)
-
-        # Tính số slot còn lại
-        slots_remaining = max_threads - running_count
-
-        print(f"Số luồng tối đa: {max_threads}")
-        print(f"Số tài khoản đang chạy: {running_count}")
-        print(f"Số slot còn lại: {slots_remaining}")
-        print(f"Số tài khoản cần chạy: {len(available_rows)}")
-
-        # Chạy các tài khoản còn lại trong giới hạn slot
-        for row in available_rows:
-            if slots_remaining > 0:
-                print(f"Đang xử lý dòng {row}")
-                
-                # Kiểm tra lại trạng thái trước khi chạy
-                status_item = self.table.item(row, 9)
-                current_status = status_item.text() if status_item else "Unknown"
-                
-                # Kiểm tra checkbox pause một lần nữa
-                checkbox_widget = self.table.cellWidget(row, 8)
-                is_paused = checkbox_widget and checkbox_widget.layout().itemAt(0).widget().isChecked()
-                
-                if current_status in ["Chưa bắt đầu", "Đã dừng"] and not is_paused:
-                    self.start_task(row)
-                    slots_remaining -= 1
-                
-                # Nếu hết slot, dừng lại
-                if slots_remaining <= 0:
-                    break
-            else:
-                break
-
-    def stop_account(self, row):
-        try:
-            # Đóng driver trong thread riêng
-            if hasattr(self, 'drivers') and row in self.drivers:
-                driver = self.drivers[row]
-                # Tạo và khởi chạy thread
-                self.chrome_thread = ChromeThread(driver, row)
-                self.chrome_thread.finished.connect(self.on_chrome_closed)
-                self.chrome_thread.start()
-                
-                # Xóa driver khỏi dictionary
-                del self.drivers[row]
-            
-            # Cập nhật trạng thái ngay lập tức
-            status_item = self.table.item(row, 9)
-            if status_item:
-                status_item.setText("Đang dừng...")
-
-        except Exception as e:
-            print(f"Lỗi khi dừng tài khoản: {str(e)}")
-
-    def on_chrome_closed(self, row):
-        # Callback khi Chrome đã đóng xong
-        status_item = self.table.item(row, 9)
-        if status_item:
-            status_item.setText("Đã dừng")
-
-    def delete_account(self):
-        """Delete selected account."""
-        current_row = self.table.currentRow()
-        if current_row >= 0:  # Kiểm tra có dòng nào được chọn không
-            # Lấy thông tin tài khoản cần xóa
-            tkfb = self.table.item(current_row, 1).text()
-            
-            try:
-                # Đọc danh sách tài khoản từ file
-                with open("taikhoan.json", "r", encoding='utf-8') as f:
-                    accounts = json.load(f)
-                
-                # Xóa tài khoản khỏi danh sách
-                accounts = [acc for acc in accounts if acc["tkfb"] != tkfb]
-                
-                # Lưu lại danh sách đã cập nhật
-                with open("taikhoan.json", "w", encoding='utf-8') as f:
-                    json.dump(accounts, f, indent=4, ensure_ascii=False)
-                
-                # Xóa dòng khỏi bảng
-                self.table.removeRow(current_row)
-                
-                # Cập nhật lại STT cho các dòng còn lại
-                for row in range(self.table.rowCount()):
-                    stt_item = QTableWidgetItem(str(row + 1))
-                    stt_item.setTextAlignment(Qt.AlignCenter)
-                    stt_item.setFlags(stt_item.flags() & ~Qt.ItemIsEditable)
-                    self.table.setItem(row, 0, stt_item)
-                
-            except FileNotFoundError:
-                print("Không tìm thấy file taikhoan.json")
-            except Exception as e:
-                print(f"Lỗi khi xóa tài khoản: {str(e)}")
-
-    def on_widget_click(self, event):
-        # Lấy vị trí click trong bảng
-        pos = self.table.viewport().mapFrom(self, event.pos())
-        if not self.table.rect().contains(pos):
-            # Nếu click ra ngoài bảng
-            self.table.clearSelection()
-            # Bỏ chọn tất cả checkbox
-            for row in range(self.table.rowCount()):
-                checkbox_widget = self.table.cellWidget(row, 8)
-                if checkbox_widget:
-                    checkbox = checkbox_widget.layout().itemAt(0).widget()
-                    checkbox.setChecked(False)
-
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    window = MainApp()
-    window.show()
-    sys.exit(app.exec_())
+        action = menu.exec_(self
