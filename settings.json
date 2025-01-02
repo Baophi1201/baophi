@@ -1,0 +1,11 @@
+{
+    "Số luồng": 1,
+    "Thời gian giữa 2 nick": 12,
+    "Thời gian thao tác": 1,
+    "Số job tối thiểu": 1,
+    "Số job tối đa": 12,
+    "Số job kết thúc": 1,
+    "profile_path": "C:/Users/Administrator/Desktop/Tools/Profile",
+    "chromedriver_path": "C:/Users/Administrator/Desktop/Tools/chromedriver.exe",
+    "captcha_extension": "C:/Users/Administrator/Desktop/Tools/captcha.crx"
+}
