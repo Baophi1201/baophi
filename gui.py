@@ -1,8 +1,7 @@
 import sys
 import json
 import time
-import threading  # Import threading
-
+import threading
 from login import start_login_process
 from caidatchung import SettingsApp
 from themtaikhoan import AddAccountApp
@@ -29,6 +28,7 @@ from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QFont
 from lamviec import start_work_process
 import psutil  # Thêm thư viện psutil
+from selenium.common.exceptions import WebDriverException  # Import WebDriverException
 
 
 class ChromeThread(QThread):
@@ -434,4 +434,4 @@ class MainApp(QMainWindow):
         delete_action = menu.addAction("Xóa tài khoản")
 
         # Lấy dòng được chọn
-        row = self.table.rowAt(position.y
+        row
