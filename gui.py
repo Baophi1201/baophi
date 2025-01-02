@@ -1,27 +1,44 @@
 import sys
 import json
 import time
+import threading  # Import threading
+
 from login import start_login_process
 from caidatchung import SettingsApp
 from themtaikhoan import AddAccountApp
 from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QVBoxLayout, QPushButton, QTableWidget, QTableWidgetItem,
-    QCheckBox, QHeaderView, QMenu, QAction, QFileDialog, QWidget, QHBoxLayout, QLineEdit, QStyledItemDelegate,
-    QLabel, QMessageBox
+    QApplication,
+    QMainWindow,
+    QVBoxLayout,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QCheckBox,
+    QHeaderView,
+    QMenu,
+    QAction,
+    QFileDialog,
+    QWidget,
+    QHBoxLayout,
+    QLineEdit,
+    QStyledItemDelegate,
+    QLabel,
+    QMessageBox,
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QFont
 from lamviec import start_work_process
 import psutil  # Thêm thư viện psutil
 
+
 class ChromeThread(QThread):
     finished = pyqtSignal(int)  # Signal để thông báo khi đóng xong Chrome
-    
+
     def __init__(self, driver, row):
         super().__init__()
         self.driver = driver
         self.row = row
-    
+
     def run(self):
         try:
             if self.driver:
@@ -30,14 +47,15 @@ class ChromeThread(QThread):
             pass
         self.finished.emit(self.row)
 
+
 class MainApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Golike Tool")
-        
+
         # Thiết lập kích thước cửa sổ
         self.resize(1200, 600)  # Tăng kích thước cửa sổ
-        
+
         # Di chuyển cửa sổ ra giữa màn hình
         screen = QApplication.primaryScreen().geometry()
         x = (screen.width() - self.width()) // 2
@@ -61,12 +79,12 @@ class MainApp(QMainWindow):
         # Nút "Cài đặt chung" và "Thêm tài khoản" nằm gần nhau và kích thước nhỏ
         button_layout = QHBoxLayout()
         button_layout.setSpacing(5)  # Giảm khoảng cách giữa các widget xuống 5px
-        
+
         self.settings_button = QPushButton("Cài đặt chung")
         self.settings_button.setFixedSize(100, 25)  # Kích thước nhỏ hơn
         self.settings_button.clicked.connect(self.open_settings)
         button_layout.addWidget(self.settings_button)
-        
+
         self.add_account_button = QPushButton("Thêm tài khoản")
         self.add_account_button.setFixedSize(100, 25)  # Kích thước nhỏ hơn
         self.add_account_button.clicked.connect(self.open_add_account)
@@ -74,7 +92,7 @@ class MainApp(QMainWindow):
 
         # Nút "Đóng Driver"
         self.close_driver_button = QPushButton("Đóng Driver")
-        self.close_driver_button.setFixedSize(100, 25) 
+        self.close_driver_button.setFixedSize(100, 25)
         self.close_driver_button.clicked.connect(self.close_all_drivers)
         button_layout.addWidget(self.close_driver_button)
 
@@ -98,10 +116,15 @@ class MainApp(QMainWindow):
         # Load dữ liệu tài khoản
         self.load_accounts()
 
+        # Thread kiểm tra trạng thái driver
+        self.timer_thread = threading.Thread(target=self.check_drivers_status)
+        self.timer_thread.daemon = True
+        self.timer_thread.start()
+
     def get_chromedriver_path(self):
         """Đọc đường dẫn chromedriver từ settings.json"""
         try:
-            with open("settings.json", "r", encoding='utf-8') as file:
+            with open("settings.json", "r", encoding="utf-8") as file:
                 settings = json.load(file)
                 return settings.get("chromedriver_path", "")
         except FileNotFoundError:
@@ -117,35 +140,46 @@ class MainApp(QMainWindow):
     def setup_table(self):
         # Thiết lập bảng
         self.table.setColumnCount(10)  # Tăng số lượng cột từ 9 lên 10
-        headers = ["STT", "TK Facebook", "MK Facebook", "TK Golike", "MK Golike", "Cookie", "Proxy", "Job", "Tạm dừng", "Trạng thái"]
+        headers = [
+            "STT",
+            "TK Facebook",
+            "MK Facebook",
+            "TK Golike",
+            "MK Golike",
+            "Cookie",
+            "Proxy",
+            "Job",
+            "Tạm dừng",
+            "Trạng thái",
+        ]
         self.table.setHorizontalHeaderLabels(headers)
 
         # Thiết lập độ rộng cột
         header = self.table.horizontalHeader()
-        
+
         # Cột STT
         self.table.setColumnWidth(0, 50)
         header.setSectionResizeMode(0, QHeaderView.Fixed)
-        
+
         # Các cột tài khoản
         for i in range(1, 6):
             header.setSectionResizeMode(i, QHeaderView.Stretch)
-        
+
         # Cột Cookie
         header.setSectionResizeMode(5, QHeaderView.Stretch)
-        
+
         # Cột Job
         self.table.setColumnWidth(7, 60)
         header.setSectionResizeMode(7, QHeaderView.Fixed)
-        
+
         # Cột Tạm dừng
         self.table.setColumnWidth(8, 80)
         header.setSectionResizeMode(8, QHeaderView.Fixed)
-        
+
         # Cột Trạng thái
         self.table.setColumnWidth(9, 300)  # Tăng độ rộng cột trạng thái
         header.setSectionResizeMode(9, QHeaderView.Fixed)
-        
+
         # Căn giữa header
         for i in range(self.table.columnCount()):
             self.table.horizontalHeaderItem(i).setTextAlignment(Qt.AlignCenter)
@@ -155,11 +189,14 @@ class MainApp(QMainWindow):
 
         # Thiết lập chọn dòng và không cho chỉnh sửa
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
-        self.table.setSelectionMode(QTableWidget.MultiSelection)  # Cho phép chọn nhiều dòng
+        self.table.setSelectionMode(
+            QTableWidget.MultiSelection
+        )  # Cho phép chọn nhiều dòng
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
 
         # Thiết lập stylesheet cho bảng
-        self.table.setStyleSheet("""
+        self.table.setStyleSheet(
+            """
             QTableWidget {
                 gridline-color: #d6d9dc;
                 background-color: white;
@@ -189,12 +226,13 @@ class MainApp(QMainWindow):
                 background-color: #f0f0f0;
                 border: 1px solid #d6d9dc;
             }
-        """)
+        """
+        )
 
         # Thiết lập menu chuột phải
         self.table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self.show_context_menu)
-        
+
         # Kết nối sự kiện keyPressEvent và clicked
         self.table.keyPressEvent = self.handle_key_press
         self.table.clicked.connect(self.on_table_clicked)
@@ -210,7 +248,9 @@ class MainApp(QMainWindow):
                     # Ngắt kết nối tạm thởi để tránh trigger sự kiện
                     checkbox.stateChanged.disconnect()
                     checkbox.setChecked(False)
-                    checkbox.stateChanged.connect(lambda state, r=row: self.on_checkbox_changed(state, r))
+                    checkbox.stateChanged.connect(
+                        lambda state, r=row: self.on_checkbox_changed(state, r)
+                    )
             # Chọn tất cả các dòng
             self.table.selectAll()
         else:
@@ -221,7 +261,7 @@ class MainApp(QMainWindow):
         # Nếu click vào cột checkbox, không làm gì cả
         if index.column() == 8:
             return
-            
+
         # Nếu click vào các cột khác, bỏ chọn tất cả checkbox
         for row in range(self.table.rowCount()):
             checkbox_widget = self.table.cellWidget(row, 8)
@@ -230,7 +270,9 @@ class MainApp(QMainWindow):
                 # Ngắt kết nối tạm thởi để tránh trigger sự kiện
                 checkbox.stateChanged.disconnect()
                 checkbox.setChecked(False)
-                checkbox.stateChanged.connect(lambda state, r=row: self.on_checkbox_changed(state, r))
+                checkbox.stateChanged.connect(
+                    lambda state, r=row: self.on_checkbox_changed(state, r)
+                )
 
     def load_accounts(self):
         """Load account data from a JSON file and populate the table."""
@@ -239,14 +281,14 @@ class MainApp(QMainWindow):
             self.table.setRowCount(0)
 
             # Đọc dữ liệu từ file
-            with open("taikhoan.json", "r", encoding='utf-8') as file:
+            with open("taikhoan.json", "r", encoding="utf-8") as file:
                 accounts = json.load(file)
 
             # Add accounts to the table
             for index, account in enumerate(accounts, 1):
                 row_position = self.table.rowCount()
                 self.table.insertRow(row_position)
-                
+
                 # Create and set items with center alignment
                 # Thêm STT
                 stt_item = QTableWidgetItem(str(index))
@@ -255,16 +297,21 @@ class MainApp(QMainWindow):
                 self.table.setItem(row_position, 0, stt_item)
 
                 # Thêm các thông tin tài khoản
-                for col, value in enumerate([
-                    account.get("tkfb", ""),
-                    account.get("mkfb", ""),
-                    account.get("tkgolike", ""),
-                    account.get("mkgolike", ""),
-                    account.get("cookie", ""),
-                    account.get("proxy", ""),
-                    account.get("job", "")
-                ], 1):  # Bắt đầu từ cột 1 vì cột 0 là STT
-                    item = QTableWidgetItem(str(value))  # Chuyển đổi value thành string
+                for col, value in enumerate(
+                    [
+                        account.get("tkfb", ""),
+                        account.get("mkfb", ""),
+                        account.get("tkgolike", ""),
+                        account.get("mkgolike", ""),
+                        account.get("cookie", ""),
+                        account.get("proxy", ""),
+                        account.get("job", ""),
+                    ],
+                    1,
+                ):  # Bắt đầu từ cột 1 vì cột 0 là STT
+                    item = QTableWidgetItem(
+                        str(value)
+                    )  # Chuyển đổi value thành string
                     item.setTextAlignment(Qt.AlignCenter)
                     item.setFlags(item.flags() & ~Qt.ItemIsEditable)
                     self.table.setItem(row_position, col, item)
@@ -276,7 +323,9 @@ class MainApp(QMainWindow):
                 checkbox_layout.addWidget(checkbox)
                 checkbox_layout.setAlignment(Qt.AlignCenter)
                 checkbox_layout.setContentsMargins(0, 0, 0, 0)
-                checkbox.stateChanged.connect(lambda state, row=row_position: self.on_checkbox_changed(state, row))
+                checkbox.stateChanged.connect(
+                    lambda state, row=row_position: self.on_checkbox_changed(state, row)
+                )
                 self.table.setCellWidget(row_position, 8, checkbox_widget)
 
                 # Add status with center alignment
@@ -304,6 +353,7 @@ class MainApp(QMainWindow):
 
     def open_add_account(self):
         from themtaikhoan import AddAccountApp
+
         self.add_account_window = AddAccountApp(self)  # This method should be defined
         self.add_account_window.show()
 
@@ -314,22 +364,26 @@ class MainApp(QMainWindow):
         def run_task():
             try:
                 # Khởi tạo driver thông qua quá trình login
-                account_data = self.get_account_data_from_row(row)  # Lấy thông tin tài khoản
+                account_data = self.get_account_data_from_row(
+                    row
+                )  # Lấy thông tin tài khoản
                 driver = start_login_process(
-                    chromedriver_path, account_data, account_data["tkfb"]  # Truyền tên profile
+                    chromedriver_path,
+                    account_data,
+                    account_data["tkfb"],  # Truyền tên profile
                 )
-                
+
                 if driver:
                     # Lưu driver vào dictionary
-                    if not hasattr(self, 'drivers'):
+                    if not hasattr(self, "drivers"):
                         self.drivers = {}
                     self.drivers[row] = driver
-                    
+
                     # Cập nhật trạng thái
                     status_item = self.table.item(row, 9)
                     if status_item:
                         self.table.item(row, 9).setText("Đang chạy")
-                    
+
                     # Bắt đầu xử lý công việc
                     start_work_process(account_data)
                 else:
@@ -337,7 +391,7 @@ class MainApp(QMainWindow):
                     status_item = self.table.item(row, 9)
                     if status_item:
                         self.table.item(row, 9).setText("Lỗi khởi tạo")
-            
+
             except Exception as e:
                 # Xử lý các ngoại lệ không mong muốn
                 print(f"Lỗi khi khởi chạy tài khoản: {e}")
@@ -347,6 +401,7 @@ class MainApp(QMainWindow):
 
         # Chạy task trong thread riêng để không chặn giao diện
         import threading
+
         task_thread = threading.Thread(target=run_task)
         task_thread.daemon = True
         task_thread.start()
@@ -368,7 +423,7 @@ class MainApp(QMainWindow):
             "mkgolike": mkgolike,
             "cookie": cookie,
             "proxy": proxy,
-            "job": job
+            "job": job,
         }
 
     def show_context_menu(self, position):
@@ -379,14 +434,4 @@ class MainApp(QMainWindow):
         delete_action = menu.addAction("Xóa tài khoản")
 
         # Lấy dòng được chọn
-        row = self.table.rowAt(position.y())
-        
-        # Vô hiệu hóa nút xóa nếu không click vào dòng nào
-        if row < 0:
-            delete_action.setEnabled(False)
-        else:
-            # Kiểm tra trạng thái để enable/disable các action
-            status_item = self.table.item(row, 9)  # Cột trạng thái
-            if status_item:
-                status = status_item.text()
-                start_action.setEnabled(status in ["Chưa bắt đầu", "Đã dừng"])
+        row = self.table.rowAt(position.y
