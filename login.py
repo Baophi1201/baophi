@@ -193,12 +193,25 @@ def create_chrome_options(proxy_config=None):
         options.add_argument('--enable-proxy-resolver')
         options.add_argument('--proxy-connection-timeout=30')
     
-    # Thêm extension captcha
-    captcha_extension_path = r"C:\Users\Administrator\Desktop\Tools\captcha.crx"
-    if os.path.exists(captcha_extension_path):
-        prepared_captcha_extension = prepare_extension(captcha_extension_path)
-        if prepared_captcha_extension:
-            extensions.append(prepared_captcha_extension)
+    # Thêm extension captcha từ settings.json
+    try:
+        with open("settings.json", "r", encoding='utf-8') as file:
+            settings = json.load(file)
+
+        captcha_extension_path = settings.get("captcha_extension_path", "")
+        if os.path.exists(captcha_extension_path):
+            prepared_captcha_extension = prepare_extension(captcha_extension_path)
+            if prepared_captcha_extension:
+                extensions.append(prepared_captcha_extension)
+
+        captcha_extension_path_2 = settings.get("captcha_extension_path_2", "")
+        if os.path.exists(captcha_extension_path_2):
+            prepared_captcha_extension_2 = prepare_extension(captcha_extension_path_2)
+            if prepared_captcha_extension_2:
+                extensions.append(prepared_captcha_extension_2)
+
+    except Exception as e:
+        print(f"Lỗi đọc settings hoặc thêm extension captcha: {e}")
     
     # Thêm tất cả các extension
     if extensions:
@@ -416,30 +429,6 @@ def start_login_process(chromedriver_path, timeout=60):
             accounts = json.load(file)
         
         # Kiểm tra và lấy tài khoản đầu tiên
-        if not accounts:
-            print("Không có tài khoản nào để đăng nhập.")
-            return None
-        
-        # Lấy tài khoản đầu tiên
-        account_data = accounts[0]
-        
-        # In ra thông tin proxy để debug
-        print("Thông tin proxy từ tài khoản:", account_data.get('proxy', 'Không có proxy'))
-        
-        # Khởi tạo đăng nhập Facebook
-        login = FacebookLogin(chromedriver_path, account_data)
-        
-        # Tạo driver
-        driver = login.create_driver()
-        
-        if not driver:
-            print("Không thể tạo driver.")
-            return None
-        
-        # Trả về driver
-        return driver
-    
-    except Exception as e:
-        print(f"Lỗi trong quá trình đăng nhập: {e}")
-        traceback.print_exc()
-        return None
+        if not accounts
+
+ *
