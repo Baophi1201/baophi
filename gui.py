@@ -12,6 +12,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QFont
 from lamviec import start_work_process
+import psutil  # Thêm thư viện psutil
 
 class ChromeThread(QThread):
     finished = pyqtSignal(int)  # Signal để thông báo khi đóng xong Chrome
@@ -70,6 +71,12 @@ class MainApp(QMainWindow):
         self.add_account_button.setFixedSize(100, 25)  # Kích thước nhỏ hơn
         self.add_account_button.clicked.connect(self.open_add_account)
         button_layout.addWidget(self.add_account_button)
+
+        # Nút "Đóng Driver"
+        self.close_driver_button = QPushButton("Đóng Driver")
+        self.close_driver_button.setFixedSize(100, 25) 
+        self.close_driver_button.clicked.connect(self.close_all_drivers)
+        button_layout.addWidget(self.close_driver_button)
 
         # Thêm dòng chữ "Thu nhập" vào cùng hàng với các nút
         self.label_income = QLabel("Thu nhập")
@@ -383,7 +390,3 @@ class MainApp(QMainWindow):
             if status_item:
                 status = status_item.text()
                 start_action.setEnabled(status in ["Chưa bắt đầu", "Đã dừng"])
-                stop_action.setEnabled(status == "Đang chạy")
-
-        # Hiển thị menu và xử lý action được chọn
-        action = menu.exec_(self
